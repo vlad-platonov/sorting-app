@@ -34,13 +34,13 @@ You can now run the Sorting Application by executing one of the following comman
 - Using the Gradle wrapper:
 
     ```
-    ./gradlew run
+    ./gradlew bootRun
     ```
 
 - Directly through Gradle:
 
     ```
-    gradle run
+    gradle bootRun
     ```
 
 ## 📜 Features
