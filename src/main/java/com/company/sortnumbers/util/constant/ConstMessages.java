@@ -14,6 +14,7 @@ public class ConstMessages {
         public static final String NOT_INTEGER_ERROR = "Please enter a number";
         public static final String NOT_POSITIVE_ERROR = "Please enter a positive number";
         public static final String NUMBER_LIMIT_ERROR = "Please choose a number less <=30";
+        public static final String ANIMATION_IS_STARTED = "Animation is started, please wait";
     }
 
     public static class Labels {

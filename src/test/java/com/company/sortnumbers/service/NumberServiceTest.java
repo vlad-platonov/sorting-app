@@ -5,7 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.company.sortnumbers.util.constant.ConstSettings;
+import com.company.sortnumbers.util.model.SwapPair;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -55,20 +59,34 @@ class NumberServiceTest {
     }
 
     @Test
-    void should_SortNumbersInAscendingOrder_When_SortNumberButtonsIsCalledWithTrue() {
-        List<Integer> numbers = List.of(3, 1, 2);
+    void should_SortNumbersInAscendingOrder_When_quickSortIsCalled() {
+        List<Integer> numbers = new ArrayList<>(List.of(3, 1, 2));
 
-        List<Integer> sortedNumbers = numberService.sortNumberButtons(numbers, true);
+        Set<SwapPair> swapPairs = numberService.quickSort(numbers);
 
-        assertEquals(List.of(1, 2, 3), sortedNumbers);
+        assertEquals(List.of(1, 2, 3), numbers);
+
+        Set<SwapPair> expectedSwapPairs = new HashSet<>(List.of(
+            SwapPair.builder().first(3).second(1).build(),
+            SwapPair.builder().first(2).second(3).build()
+        ));
+
+        assertEquals(expectedSwapPairs, swapPairs);
     }
 
     @Test
-    void should_SortNumbersInDescendingOrder_When_SortNumberButtonsIsCalledWithFalse() {
-        List<Integer> numbers = List.of(3, 1, 2);
+    void should_SortNumbersInDescendingOrder_When_quickSortIsCalledTwice() {
+        List<Integer> numbers = new ArrayList<>(List.of(1, 2, 3));
 
-        List<Integer> sortedNumbers = numberService.sortNumberButtons(numbers, false);
+        numberService.quickSort(numbers);
+        Set<SwapPair> swapPairs = numberService.quickSort(numbers);
 
-        assertEquals(List.of(3, 2, 1), sortedNumbers);
+        assertEquals(List.of(3, 2, 1), numbers);
+
+        Set<SwapPair> expectedSwapPairs = new HashSet<>(List.of(
+            SwapPair.builder().first(3).second(1).build()
+        ));
+
+        assertEquals(expectedSwapPairs, swapPairs);
     }
 }

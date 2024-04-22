@@ -1,15 +1,21 @@
 package com.company.sortnumbers.view.swing;
 
+import static com.company.sortnumbers.util.constant.ConstMessages.Messages.ANIMATION_IS_STARTED;
 import static com.company.sortnumbers.util.constant.ConstMessages.Messages.NUMBER_LIMIT_ERROR;
 import static com.company.sortnumbers.util.constant.ConstMessages.Panels.INPUT_PANEL;
 import static com.company.sortnumbers.util.constant.ConstMessages.Panels.NUMBER_PANEL;
+import static com.company.sortnumbers.util.constant.ConstSettings.BUTTON_HEIGHT;
+import static com.company.sortnumbers.util.constant.ConstSettings.BUTTON_MARGIN;
+import static com.company.sortnumbers.util.constant.ConstSettings.BUTTON_WIDTH;
 import static com.company.sortnumbers.util.constant.ConstSettings.MAX_COLUMN;
 import static com.company.sortnumbers.util.constant.ConstSettings.TEXT_FIELD_SIZE;
 
+import aurelienribon.tweenengine.Tween;
 import com.company.sortnumbers.service.NumberService;
 import com.company.sortnumbers.util.constant.ConstMessages.Buttons;
 import com.company.sortnumbers.util.constant.ConstMessages.Labels;
 import com.company.sortnumbers.util.constant.ConstMessages.Messages;
+import com.company.sortnumbers.util.model.SwapPair;
 import com.company.sortnumbers.util.settings.LookAndFeelUtils;
 import com.company.sortnumbers.util.validation.ValidationUtil;
 import com.company.sortnumbers.view.MessageDisplay;
@@ -22,24 +28,30 @@ import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import javax.swing.AbstractButton;
 import javax.swing.Box;
-import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.WindowConstants;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import org.springframework.stereotype.Component;
 
 @Component
 @Getter
+@Setter
 @RequiredArgsConstructor
 public class MainMenuFrame extends JFrame {
 
@@ -47,8 +59,10 @@ public class MainMenuFrame extends JFrame {
     private final MessageDisplay messageDisplay;
     private final ValidationUtil validation;
     private final List<JButton> numberButtons = new ArrayList<>();
-
+    private final Map<Integer, Integer> swapPairs = new LinkedHashMap<>();
+    private final SwingAnimation swingAnimation;
     private int inputNumber;
+    private boolean isAnimating = false;
     private JButton enterBtn;
     private JTextField enterField;
     private JLabel enterLabel;
@@ -56,11 +70,11 @@ public class MainMenuFrame extends JFrame {
     private CardLayout cardLayout;
     private JButton sortButton;
     private JButton resetButton;
-    private boolean ascending = false;
     private JPanel numberPanel;
     private JPanel numberButtonPanel;
     private JPanel buttonPanel;
     private JPanel inputPanel;
+    private JScrollPane scrollPane;
 
     @PostConstruct
     @SuppressWarnings("PMD.UnusedPrivateMethod")
@@ -80,7 +94,7 @@ public class MainMenuFrame extends JFrame {
 
         cardLayout = new CardLayout();
         cards = new JPanel(cardLayout);
-        cards.setPreferredSize(new Dimension(400, 400));
+        cards.setPreferredSize(new Dimension(600, 600));
         setLayout(new BorderLayout());
         add(cards, BorderLayout.CENTER);
     }
@@ -88,6 +102,7 @@ public class MainMenuFrame extends JFrame {
     private void initComponents() {
         initInputPanel();
         initNumberPanel();
+        Tween.registerAccessor(JButton.class, new JButtonAccessor());
     }
 
     private void initInputPanel() {
@@ -117,16 +132,14 @@ public class MainMenuFrame extends JFrame {
     }
 
     private void initNumberPanel() {
-        numberPanel = new JPanel();
+        numberPanel = new JPanel(new BorderLayout());
         numberButtonPanel = new JPanel();
-        JPanel fixedSizeNumberPanel = new JPanel();
-
-        numberPanel.setLayout(new BoxLayout(numberPanel, BoxLayout.Y_AXIS));
         initButtonPanel();
-        numberPanel.add(numberButtonPanel);
 
-        fixedSizeNumberPanel.setPreferredSize(new Dimension(400, 400));
-        fixedSizeNumberPanel.add(numberPanel);
+        scrollPane = new JScrollPane(numberButtonPanel);
+        numberPanel.add(buttonPanel, BorderLayout.NORTH);
+        numberPanel.add(scrollPane, BorderLayout.CENTER);
+
         cards.add(numberPanel, NUMBER_PANEL);
     }
 
@@ -144,7 +157,7 @@ public class MainMenuFrame extends JFrame {
         resetButton.setFocusPainted(false);
 
         sortButton.addActionListener(e -> handleSortButtonClick());
-        resetButton.addActionListener(e -> showInputPanel());
+        resetButton.addActionListener(e -> handleResetClick());
 
         buttonPanel.add(sortButton);
         buttonPanel.add(resetButton);
@@ -164,33 +177,53 @@ public class MainMenuFrame extends JFrame {
         }
     }
 
-    private void handleSortButtonClick() {
-        ascending = !ascending;
-        List<Integer> numbers = numberButtons.stream()
-            .map(AbstractButton::getText)
-            .map(Integer::parseInt)
-            .toList();
+    private void handleResetClick() {
+        if (isAnimating) {
+            messageDisplay.showMessage(ANIMATION_IS_STARTED);
+            return;
+        }
 
-        numberButtonPanel.removeAll();
-        numberButtons.clear();
-
-        numbers = numberService.sortNumberButtons(numbers, ascending);
-        addNumbersToPanel(numbers);
-
-        numberButtonPanel.revalidate();
-        numberButtonPanel.repaint();
+        cardLayout.show(cards, INPUT_PANEL);
     }
 
     private void handleNumberClick(int number) {
+        if (isAnimating) {
+            messageDisplay.showMessage(ANIMATION_IS_STARTED);
+            return;
+        }
+
         if (numberService.shouldGenerateNewNumbers(number)) {
             generateRandomNumbers(inputNumber);
         } else {
-            JOptionPane.showMessageDialog(null, NUMBER_LIMIT_ERROR);
+            messageDisplay.showMessage(NUMBER_LIMIT_ERROR);
         }
     }
 
-    private void showInputPanel() {
-        cardLayout.show(cards, INPUT_PANEL);
+    private void handleSortButtonClick() {
+        if (isAnimating) {
+            messageDisplay.showMessage(ANIMATION_IS_STARTED);
+            return;
+        }
+
+        Set<SwapPair> swapPairs = numberService.quickSort(getNumbersFromButtons());
+        if (!swapPairs.isEmpty()) {
+            swingAnimation.startAnimation(this, swapPairs);
+        }
+    }
+
+    private List<Integer> getNumbersFromButtons() {
+        return numberButtons.stream()
+            .map(AbstractButton::getText)
+            .map(Integer::parseInt)
+            .collect(Collectors.toList());
+    }
+
+    public JButton getButtonWithNumber(int number) {
+        return numberButtons.stream()
+            .filter(b -> Integer.parseInt(b.getText()) == number)
+            .findFirst()
+            .orElseThrow(
+                () -> new IllegalArgumentException("Button with number " + number + " not found"));
     }
 
     private void generateRandomNumbers(int numberCount) {
@@ -205,29 +238,24 @@ public class MainMenuFrame extends JFrame {
     }
 
     private void addNumbersToPanel(List<Integer> numbers) {
-        numberButtonPanel.setLayout(new GridBagLayout());
+        numberButtonPanel.setLayout(null);
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.insets.set(5, 5, 5, 5);
-
-        numbers.forEach(number -> {
-            addButton(number, gbc);
-            gbc.gridy++;
-            if (gbc.gridy >= MAX_COLUMN) {
-                gbc.gridy = 0;
-                gbc.gridx++;
-            }
+        IntStream.range(0, numbers.size()).forEach(i -> {
+            int x = BUTTON_MARGIN + (BUTTON_WIDTH + BUTTON_MARGIN) * (i / MAX_COLUMN);
+            int y = BUTTON_MARGIN + (BUTTON_HEIGHT + BUTTON_MARGIN) * (i % MAX_COLUMN);
+            addButtonToPanel(numbers.get(i), x, y);
         });
+
+        int panelWidth = (BUTTON_WIDTH + BUTTON_MARGIN) * ((numbers.size() - 1) / MAX_COLUMN + 1);
+        int panelHeight = (BUTTON_HEIGHT + BUTTON_MARGIN) * MAX_COLUMN;
+        numberButtonPanel.setPreferredSize(new Dimension(panelWidth, panelHeight));
     }
 
-    private void addButton(int number, GridBagConstraints gbc) {
+    private void addButtonToPanel(Integer number, int x, int y) {
         JButton button = createButton(number);
-
+        button.setBounds(x, y, BUTTON_WIDTH, BUTTON_HEIGHT);
+        numberButtonPanel.add(button);
         numberButtons.add(button);
-        numberButtonPanel.add(button, gbc);
     }
 
     private JButton createButton(int number) {
@@ -240,5 +268,4 @@ public class MainMenuFrame extends JFrame {
         button.addActionListener(e -> handleNumberClick(number));
         return button;
     }
-
 }
